@@ -1,101 +1,137 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+
+export default function Page() {
+  const [students, setStudents] = useState<string[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [isTiming, setIsTiming] = useState<boolean>(false);
+
+  // Fetch the students from the API on component mount
+  useEffect(() => {
+    const fetchStudents = async () => {
+      const res = await fetch('/api/get-students');
+      if (res.ok) {
+        const data = await res.json();
+        setStudents(data.students || []);
+      } else {
+        console.error('Failed to fetch students');
+      }
+    };
+    fetchStudents();
+  }, []);
+
+  const handleStudentSelect = (student: string) => {
+    setSelectedStudent(student);
+  };
+
+  const handleStart = () => {
+    if (!selectedStudent) {
+      alert("Please select a student first.");
+      return;
+    }
+    setStartTime(Date.now());
+    setIsTiming(true);
+  };
+
+  function formatTime(date: Date): string {
+    const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+    const timeStr = date.toLocaleTimeString('en-US', options); // e.g. "11:30 AM"
+    return timeStr.replace(' ', ''); // remove space to get "11:30AM"
+  }
+
+  const handleStop = async () => {
+    if (!isTiming || !selectedStudent || !startTime) return;
+
+    const endTime = Date.now();
+    // Get date in YYYY-MM-DD
+    const dateStr = new Date(startTime).toISOString().split('T')[0];
+
+    // Format times to AM/PM
+    const startLocal = formatTime(new Date(startTime));
+    const endLocal = formatTime(new Date(endTime));
+
+    await fetch('/api/log-behavior', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student: selectedStudent, date: dateStr, startTime: startLocal, endTime: endLocal })
+    });
+
+    // No success alert as requested
+    setIsTiming(false);
+    setStartTime(null);
+    // Don't reset selectedStudent to maintain selection
+    // setSelectedStudent(null); <- Removed this line
+  };
+
+  const baseButtonStyle: React.CSSProperties = {
+    padding: "12px 18px",
+    fontSize: "1rem",
+    borderRadius: "8px",
+    border: "none",
+    cursor: "pointer",
+    transition: "background 0.3s",
+    fontWeight: "bold",
+  };
+
+  const studentButtonStyle = (student: string): React.CSSProperties => ({
+    ...baseButtonStyle,
+    background: selectedStudent === student ? "#4caf50" : "#eee",
+    color: selectedStudent === student ? "#fff" : "#000",
+    border: selectedStudent === student ? "2px solid #388e3c" : "2px solid #ccc"
+  });
+
+  const startButtonStyle: React.CSSProperties = {
+    ...baseButtonStyle,
+    marginRight: "10px",
+    background: isTiming ? "#ccc" : "#2196f3",
+    color: "#fff",
+  };
+
+  const stopButtonStyle: React.CSSProperties = {
+    ...baseButtonStyle,
+    background: isTiming ? "#f44336" : "#ccc",
+    color: "#fff",
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div style={{ fontFamily: "Arial, sans-serif", padding: "20px", maxWidth: "500px", margin: "auto" }}>
+      <h1 style={{ textAlign: "center" }}>Behavior Tracker</h1>
+      <p>Select a student:</p>
+      {!students.length && <p>Loading students...</p>}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {students.map((student) => (
+          <button 
+            key={student}
+            onClick={() => handleStudentSelect(student)}
+            style={studentButtonStyle(student)}
+          >
+            {student}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      <div style={{ marginBottom: '20px' }}>
+        <button 
+          onClick={handleStart}
+          style={startButtonStyle}
+          disabled={isTiming || !selectedStudent}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          Start
+        </button>
+
+        <button 
+          onClick={handleStop}
+          style={stopButtonStyle}
+          disabled={!isTiming}
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          Stop
+        </button>
+      </div>
+
+      {selectedStudent && <p>Selected Student: <strong>{selectedStudent}</strong></p>}
+      {isTiming && <p>Timing in progress...</p>}
     </div>
   );
 }
