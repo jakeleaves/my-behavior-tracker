@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, CSSProperties } from 'react';
+
+interface TimerInfo {
+  startTime: number | null;
+  isTiming: boolean;
+}
 
 export default function Page() {
   const [students, setStudents] = useState<string[]>([]);
-  const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
-  const [startTime, setStartTime] = useState<number | null>(null);
-  const [isTiming, setIsTiming] = useState<boolean>(false);
+  // Dictionary: student name -> { startTime, isTiming }
+  const [timers, setTimers] = useState<{ [student: string]: TimerInfo }>({});
 
   // Fetch the students from the API on component mount
   useEffect(() => {
@@ -22,116 +26,129 @@ export default function Page() {
     fetchStudents();
   }, []);
 
-  const handleStudentSelect = (student: string) => {
-    setSelectedStudent(student);
-  };
-
-  const handleStart = () => {
-    if (!selectedStudent) {
-      alert("Please select a student first.");
-      return;
-    }
-    setStartTime(Date.now());
-    setIsTiming(true);
-  };
-
+  // Format time as hh:mmAM/PM (removing space between).
   function formatTime(date: Date): string {
     const options: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
     const timeStr = date.toLocaleTimeString('en-US', options); // e.g. "11:30 AM"
-    return timeStr.replace(' ', ''); // remove space to get "11:30AM"
+    return timeStr.replace(' ', ''); // "11:30AM"
   }
 
-  const handleStop = async () => {
-    if (!isTiming || !selectedStudent || !startTime) return;
+  // Start button for a specific student
+  const handleStart = (student: string) => {
+    setTimers(prev => ({
+      ...prev,
+      [student]: {
+        startTime: Date.now(),
+        isTiming: true,
+      }
+    }));
+  };
+
+  // Stop button for a specific student
+  const handleStop = async (student: string) => {
+    const timer = timers[student];
+    if (!timer || !timer.isTiming || !timer.startTime) return; // sanity check
 
     const endTime = Date.now();
-    // Get date in YYYY-MM-DD
-    const dateStr = new Date(startTime).toISOString().split('T')[0];
-
-    // Format times to AM/PM
-    const startLocal = formatTime(new Date(startTime));
+    // Format date in YYYY-MM-DD
+    const dateStr = new Date(timer.startTime).toISOString().split('T')[0];
+    // Format start/end times
+    const startLocal = formatTime(new Date(timer.startTime));
     const endLocal = formatTime(new Date(endTime));
 
+    // Send to Google Sheets
     await fetch('/api/log-behavior', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student: selectedStudent, date: dateStr, startTime: startLocal, endTime: endLocal })
+      body: JSON.stringify({ student, date: dateStr, startTime: startLocal, endTime: endLocal })
     });
 
-    // No success alert as requested
-    setIsTiming(false);
-    setStartTime(null);
-    // Don't reset selectedStudent to maintain selection
-    // setSelectedStudent(null); <- Removed this line
+    // Clear this student's timer
+    setTimers(prev => ({
+      ...prev,
+      [student]: {
+        startTime: null,
+        isTiming: false
+      }
+    }));
   };
 
-  const baseButtonStyle: React.CSSProperties = {
-    padding: "12px 18px",
+  // Styling
+  const containerStyle: CSSProperties = {
+    fontFamily: "Arial, sans-serif",
+    padding: "20px",
+    maxWidth: "600px",
+    margin: "auto"
+  };
+
+  const studentRowStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    background: "#f8f8f8",
+    padding: "10px",
+    borderRadius: "5px",
+    marginBottom: "10px"
+  };
+
+  const studentNameStyle: CSSProperties = {
+  fontWeight: "bold",
+  fontSize: "1.1rem",
+  color: "#000", // <-- ensure the text is black
+  };
+
+
+  const buttonStyle: CSSProperties = {
+    padding: "12px 16px",
     fontSize: "1rem",
     borderRadius: "8px",
     border: "none",
     cursor: "pointer",
-    transition: "background 0.3s",
-    fontWeight: "bold",
-  };
-
-  const studentButtonStyle = (student: string): React.CSSProperties => ({
-    ...baseButtonStyle,
-    background: selectedStudent === student ? "#4caf50" : "#eee",
-    color: selectedStudent === student ? "#fff" : "#000",
-    border: selectedStudent === student ? "2px solid #388e3c" : "2px solid #ccc"
-  });
-
-  const startButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    marginRight: "10px",
-    background: isTiming ? "#ccc" : "#2196f3",
-    color: "#fff",
-  };
-
-  const stopButtonStyle: React.CSSProperties = {
-    ...baseButtonStyle,
-    background: isTiming ? "#f44336" : "#ccc",
-    color: "#fff",
+    marginRight: "8px",
+    fontWeight: "bold"
   };
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif", padding: "20px", maxWidth: "500px", margin: "auto" }}>
+    <div style={containerStyle}>
       <h1 style={{ textAlign: "center" }}>Behavior Tracker</h1>
-      <p>Select a student:</p>
+
       {!students.length && <p>Loading students...</p>}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        {students.map((student) => (
-          <button 
-            key={student}
-            onClick={() => handleStudentSelect(student)}
-            style={studentButtonStyle(student)}
-          >
-            {student}
-          </button>
-        ))}
-      </div>
 
-      <div style={{ marginBottom: '20px' }}>
-        <button 
-          onClick={handleStart}
-          style={startButtonStyle}
-          disabled={isTiming || !selectedStudent}
-        >
-          Start
-        </button>
+      {/* Render one row per student, each with Start/Stop buttons */}
+      {students.map((student) => {
+        const timer = timers[student] || { isTiming: false, startTime: null };
+        return (
+          <div key={student} style={studentRowStyle}>
+            <span style={studentNameStyle}>{student}</span>
 
-        <button 
-          onClick={handleStop}
-          style={stopButtonStyle}
-          disabled={!isTiming}
-        >
-          Stop
-        </button>
-      </div>
+            <div>
+              <button
+                onClick={() => handleStart(student)}
+                style={{
+                  ...buttonStyle,
+                  background: timer.isTiming ? "#ccc" : "#4caf50",
+                  color: "#fff"
+                }}
+                disabled={timer.isTiming}
+              >
+                Start
+              </button>
 
-      {selectedStudent && <p>Selected Student: <strong>{selectedStudent}</strong></p>}
-      {isTiming && <p>Timing in progress...</p>}
+              <button
+                onClick={() => handleStop(student)}
+                style={{
+                  ...buttonStyle,
+                  background: timer.isTiming ? "#f44336" : "#ccc",
+                  color: "#fff"
+                }}
+                disabled={!timer.isTiming}
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
